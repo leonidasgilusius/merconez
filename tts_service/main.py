@@ -19,10 +19,11 @@ class Job(BaseModel):
 class TtsRequest(BaseModel):
     text_to_speak: str
     gender: str # As per the docs, this should be "male" or "female" 
+    language: str
 
-def process_tts_task(job_id: str, text: str, gender: str):
-    tts_api_url = os.getenv("TTS_API_URL")
-    tts_access_token = os.getenv("TTS_ACCESS_TOKEN")
+def process_tts_task(job_id: str, text: str, gender: str, language:str):
+    tts_api_url = os.getenv(f"TTS_{language}_API_URL")
+    tts_access_token = os.getenv(f"TTS_{language}_ACCESS_TOKEN")
 
     if not tts_api_url or not tts_access_token:
         jobs[job_id]["status"] = "failed"
@@ -64,10 +65,12 @@ def process_tts_task(job_id: str, text: str, gender: str):
 
 @app.post("/api/v1/tts/jobs", response_model=Job, status_code=202)
 async def start_tts_job(request: TtsRequest, background_tasks: BackgroundTasks):
+    language = request.language.upper()
+
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "processing", "result": None}
     
-    background_tasks.add_task(process_tts_task, job_id, request.text_to_speak, request.gender)
+    background_tasks.add_task(process_tts_task, job_id, request.text_to_speak, request.gender, language)
     
     return {"jobId": job_id, "status": "processing", "result": None}
 

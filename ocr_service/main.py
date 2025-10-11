@@ -18,10 +18,11 @@ class Job(BaseModel):
 
 class OcrRequest(BaseModel):
     image_file_path: str
+    language: str
 
-def process_ocr_task(job_id: str, file_path: str):
-    ocr_api_url = os.getenv("OCR_API_URL")
-    ocr_access_token = os.getenv("OCR_ACCESS_TOKEN")
+def process_ocr_task(job_id: str, file_path: str, language: str):
+    ocr_api_url = os.getenv(f"OCR_{language}_API_URL")
+    ocr_access_token = os.getenv(f"OCR_{language}_ACCESS_TOKEN")
 
     if not ocr_api_url or not ocr_access_token:
         jobs[job_id]["status"] = "failed"
@@ -62,6 +63,7 @@ def process_ocr_task(job_id: str, file_path: str):
 
 @app.post("/api/v1/ocr/jobs", response_model=Job, status_code=202)
 async def start_ocr_job(request: OcrRequest, background_tasks: BackgroundTasks):
+    language = request.language.upper()
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "processing", "result": None}
     
@@ -70,7 +72,7 @@ async def start_ocr_job(request: OcrRequest, background_tasks: BackgroundTasks):
         jobs[job_id]["result"] = {"error": "File not found"}
         raise HTTPException(status_code=400, detail=f"File not found at path: {request.image_file_path}")
     
-    background_tasks.add_task(process_ocr_task, job_id, request.image_file_path)
+    background_tasks.add_task(process_ocr_task, job_id, request.image_file_path, language)
     
     return {"jobId": job_id, "status": "processing", "result": None}
 

@@ -19,10 +19,11 @@ class Job(BaseModel):
 class AsrRequest(BaseModel):
     # The user will provide the path to a local file for our script to use.
     audio_file_path: str
+    language: str
 
-def process_asr_task(job_id: str, file_path: str):
-    asr_api_url = os.getenv("ASR_API_URL")
-    asr_access_token = os.getenv("ASR_ACCESS_TOKEN")
+def process_asr_task(job_id: str, file_path: str, language: str):
+    asr_api_url = os.getenv(f"ASR_{language}_API_URL")
+    asr_access_token = os.getenv(f"ASR_{language}_ACCESS_TOKEN")
 
     if not asr_api_url or not asr_access_token:
         jobs[job_id]["status"] = "failed"
@@ -63,6 +64,8 @@ def process_asr_task(job_id: str, file_path: str):
 
 @app.post("/api/v1/asr/jobs", response_model=Job, status_code=202)
 async def start_asr_job(request: AsrRequest, background_tasks: BackgroundTasks):
+    language = request.language.upper()
+
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "processing", "result": None}
     
@@ -72,7 +75,7 @@ async def start_asr_job(request: AsrRequest, background_tasks: BackgroundTasks):
         jobs[job_id]["result"] = {"error": "File not found"}
         raise HTTPException(status_code=400, detail=f"File not found at path: {request.audio_file_path}")
     
-    background_tasks.add_task(process_asr_task, job_id, request.audio_file_path)
+    background_tasks.add_task(process_asr_task, job_id, request.audio_file_path, language)
     
     return {"jobId": job_id, "status": "processing", "result": None}
 

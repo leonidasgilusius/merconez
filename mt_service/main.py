@@ -11,15 +11,19 @@ app = FastAPI()
 # ... (Pydantic models are the same) ...
 class TranslationRequest(BaseModel):
     text: str
+    language1: str
+    language2: str
 
 class TranslationResponse(BaseModel):
     translatedText: str
 
 @app.post("/api/v1/translate", response_model=TranslationResponse)
 async def translate_text(request: TranslationRequest):
+    language1 = request.language1.upper()
+    language2 = request.language2.upper()
     
-    mt_api_url = os.getenv("MT_API_URL")
-    mt_access_token = os.getenv("MT_ACCESS_TOKEN")
+    mt_api_url = os.getenv(f"MT_{language1}_{language2}_API_URL")
+    mt_access_token = os.getenv(f"MT_{language1}_{language2}_ACCESS_TOKEN")
     
     if not mt_api_url or not mt_access_token:
         raise HTTPException(status_code=500, detail="Server configuration error: Missing API URL or Token")

@@ -1,0 +1,1 @@
+api key/token should be of the form MODEL_LANGUAGE_API_URL or MODEL_LANGUAGE_ACCESS_TOKEN
