@@ -1,9 +1,9 @@
 # Secrets
-.env
+/backend/.env
 
 # Python virtual environment
-venv/
+/backend/venv/
 
 # Python cache
-__pycache__/
-*.pyc
+/backend/__pycache__/
+/backend/*.pyc
