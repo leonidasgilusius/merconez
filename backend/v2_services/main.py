@@ -190,7 +190,7 @@ def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str, inpu
         jobs[job_id]["status"] = "completed"
         jobs[job_id]["result"] = {
             f"source_{input_language}_text": transcribed_text,
-            f"translated_{output_language}h_text": translated_text,
+            f"translated_{output_language}_text": translated_text,
             f"{output_language}_audio_url": audio_url
         }
     except Exception as e:
