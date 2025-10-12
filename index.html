@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bhashini Megathon Backend UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .framework-card {
+            background-color: #1f2937; /* gray-800 */
+            border: 1px solid #374151; /* gray-700 */
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            transition: box-shadow 0.3s ease-in-out;
+        }
+        .framework-card:hover {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+        }
+        .result-box {
+            background-color: #111827; /* gray-900 */
+            border: 1px solid #374151; /* gray-700 */
+        }
+        .btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .loader {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-gray-200 min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-blue-400">Bhashini Universal Pipeline</h1>
+            <p class="text-gray-400 mt-2">A unified interface to interact with all backend orchestration frameworks.</p>
+        </header>
+
+        <main>
+            <!-- Framework 1: Document Translation -->
+            <section id="fw1" class="framework-card">
+                <h2 class="text-2xl font-semibold text-gray-100 mb-1">Framework 1: Document Translation</h2>
+                <p class="text-gray-400 mb-4">Malayalam Image <span class="mx-2">&rarr;</span> English Text</p>
+                <div class="space-y-4">
+                    <div>
+                        <label for="fw1-file-path" class="block text-sm font-medium text-gray-300 mb-1">Image File Path</label>
+                        <input type="text" id="fw1-file-path" placeholder="e.g., malayalam_test.png" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <p class="text-xs text-gray-500 mt-1">Note: Provide the name of a file located in your root `bhashini_backend` directory.</p>
+                    </div>
+                    <button onclick="runFramework1()" class="btn w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md">Run Pipeline</button>
+                    <div id="fw1-result" class="result-box mt-4 p-4 rounded-md min-h-[100px] whitespace-pre-wrap font-mono text-sm"></div>
+                </div>
+            </section>
+
+            <!-- Framework 2: Speech Translation -->
+            <section id="fw2" class="framework-card">
+                <h2 class="text-2xl font-semibold text-gray-100 mb-1">Framework 2: Speech Translation</h2>
+                <p class="text-gray-400 mb-4">Malayalam Speech <span class="mx-2">&rarr;</span> English Text</p>
+                <div class="space-y-4">
+                    <div>
+                        <label for="fw2-file-path" class="block text-sm font-medium text-gray-300 mb-1">Audio File Path (.wav)</label>
+                        <input type="text" id="fw2-file-path" placeholder="e.g., malayalam_test.wav" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                         <p class="text-xs text-gray-500 mt-1">Note: Provide the name of a file located in your root `bhashini_backend` directory.</p>
+                    </div>
+                    <button onclick="runFramework2()" class="btn w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md">Run Pipeline</button>
+                    <div id="fw2-result" class="result-box mt-4 p-4 rounded-md min-h-[100px] whitespace-pre-wrap font-mono text-sm"></div>
+                </div>
+            </section>
+
+            <!-- Framework 3: Text to Speech -->
+            <section id="fw3" class="framework-card">
+                <h2 class="text-2xl font-semibold text-gray-100 mb-1">Framework 3: Text-to-Speech</h2>
+                <p class="text-gray-400 mb-4">English Text <span class="mx-2">&rarr;</span> Malayalam Speech</p>
+                <div class="space-y-4">
+                    <div>
+                        <label for="fw3-text" class="block text-sm font-medium text-gray-300 mb-1">English Text</label>
+                        <textarea id="fw3-text" rows="3" placeholder="Enter English text to translate and synthesize..." class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+                    </div>
+                    <button onclick="runFramework3()" class="btn w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md">Run Pipeline</button>
+                    <div id="fw3-result" class="result-box mt-4 p-4 rounded-md min-h-[100px] whitespace-pre-wrap font-mono text-sm"></div>
+                </div>
+            </section>
+
+            <!-- Framework 4: Speech-to-Speech Translation -->
+            <section id="fw4" class="framework-card">
+                 <h2 class="text-2xl font-semibold text-gray-100 mb-1">Framework 4: Speech-to-Speech</h2>
+                <p class="text-gray-400 mb-4">Malayalam Speech <span class="mx-2">&rarr;</span> English Speech</p>
+                 <div class="space-y-4">
+                     <div>
+                        <label for="fw4-file-path" class="block text-sm font-medium text-gray-300 mb-1">Audio File Path (.wav)</label>
+                        <input type="text" id="fw4-file-path" placeholder="e.g., malayalam_test.wav" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                         <p class="text-xs text-gray-500 mt-1">Note: Provide the name of a file located in your root `bhashini_backend` directory.</p>
+                    </div>
+                    <button onclick="runFramework4()" class="btn w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md">Run Pipeline</button>
+                    <div id="fw4-result" class="result-box mt-4 p-4 rounded-md min-h-[100px] whitespace-pre-wrap font-mono text-sm"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // IMPORTANT: By default, this points to your local machine.
+        // You will replace this URL with your public ngrok URL when you are ready to host.
+        const API_BASE_URL = "https://tressie-phosphorescent-greyly.ngrok-free.dev/api/v2";
+
+        // --- Helper Functions ---
+        function showLoading(resultBoxId) {
+            const resultBox = document.getElementById(resultBoxId);
+            resultBox.innerHTML = `
+                <div class="flex items-center justify-center">
+                    <div class="loader w-8 h-8 rounded-full border-4 border-t-4 border-gray-600"></div>
+                    <p class="ml-4">Processing pipeline... Please wait.</p>
+                </div>`;
+        }
+        
+        function pollJobStatus(jobId, url, resultBoxId, displayFunction) {
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${url}/${jobId}`);
+                    if (!response.ok) {
+                        throw new Error(`Polling failed with status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        clearInterval(interval);
+                        displayFunction(resultBoxId, data);
+                    }
+                } catch (error) {
+                    clearInterval(interval);
+                    document.getElementById(resultBoxId).textContent = `Error polling job status: ${error.message}`;
+                }
+            }, 3000); // Poll every 3 seconds
+        }
+
+        async function startJob(endpoint, body, resultBoxId, displayFunction) {
+            showLoading(resultBoxId);
+            try {
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!response.ok) {
+                    throw new Error(`Failed to start job. Server responded with ${response.status}`);
+                }
+                const data = await response.json();
+                pollJobStatus(data.jobId, `${API_BASE_URL}/${endpoint}/jobs`, resultBoxId, displayFunction);
+            } catch (error) {
+                document.getElementById(resultBoxId).textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // --- Framework-specific Logic ---
+        function runFramework1() {
+            const filePath = document.getElementById('fw1-file-path').value;
+            if (!filePath) { alert('Please provide an image file path.'); return; }
+            const body = { image_file_path: filePath };
+            startJob('document-translation', body, 'fw1-result', (id, data) => {
+                const box = document.getElementById(id);
+                if (data.status === 'completed') {
+                    box.innerHTML = `<strong>Status:</strong> ${data.status}<br><br><strong>Extracted Malayalam Text:</strong><br>${data.result.extracted_malayalam_text}<br><br><strong>Translated English Text:</strong><br>${data.result.translated_english_text}`;
+                } else {
+                    box.innerHTML = `<strong>Status:</strong> ${data.status}<br><strong>Error:</strong> ${data.result.error}`;
+                }
+            });
+        }
+
+        function runFramework2() {
+            const filePath = document.getElementById('fw2-file-path').value;
+            if (!filePath) { alert('Please provide an audio file path.'); return; }
+            const body = { audio_file_path: filePath };
+            startJob('speech-translation', body, 'fw2-result', (id, data) => {
+                const box = document.getElementById(id);
+                if (data.status === 'completed') {
+                    box.innerHTML = `<strong>Status:</strong> ${data.status}<br><br><strong>Transcribed Malayalam Text:</strong><br>${data.result.transcribed_malayalam_text}<br><br><strong>Translated English Text:</strong><br>${data.result.translated_english_text}`;
+                } else {
+                    box.innerHTML = `<strong>Status:</strong> ${data.status}<br><strong>Error:</strong> ${data.result.error}`;
+                }
+            });
+        }
+
+        function runFramework3() {
+            const text = document.getElementById('fw3-text').value;
+            if (!text) { alert('Please enter some text.'); return; }
+            const body = { text: text, gender: "female" };
+            startJob('text-to-speech', body, 'fw3-result', (id, data) => {
+                const box = document.getElementById(id);
+                if (data.status === 'completed') {
+                    box.innerHTML = `<strong>Status:</strong> ${data.status}<br><br><strong>Translated Malayalam Text:</strong><br>${data.result.translated_malayalam_text}<br><br><strong>Audio Link:</strong><br><a href="${data.result.malayalam_audio_url}" target="_blank" class="text-blue-400 hover:underline">${data.result.malayalam_audio_url}</a>`;
+                } else {
+                    box.innerHTML = `<strong>Status:</strong> ${data.status}<br><strong>Error:</strong> ${data.result.error}`;
+                }
+            });
+        }
+
+        function runFramework4() {
+            const filePath = document.getElementById('fw4-file-path').value;
+            if (!filePath) { alert('Please provide an audio file path.'); return; }
+            const body = { audio_file_path: filePath, gender: "female" };
+            startJob('speech-to-speech', body, 'fw4-result', (id, data) => {
+                const box = document.getElementById(id);
+                if (data.status === 'completed') {
+                    box.innerHTML = `<strong>Status:</strong> ${data.status}<br><br><strong>Transcribed Malayalam Text:</strong><br>${data.result.source_malayalam_text}<br><br><strong>Translated English Text:</strong><br>${data.result.translated_english_text}<br><br><strong>English Audio Link:</strong><br><a href="${data.result.english_audio_url}" target="_blank" class="text-blue-400 hover:underline">${data.result.english_audio_url}</a>`;
+                } else {
+                    box.innerHTML = `<strong>Status:</strong> ${data.status}<br><strong>Error:</strong> ${data.result.error}`;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+
