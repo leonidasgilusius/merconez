@@ -24,7 +24,7 @@ class Job(BaseModel):
     """A generic model to represent the status of any asynchronous job."""
     jobId: str
     status: str
-    result: dict | None = None
+    result: str | None = None
 
 # Models for the request bodies of our frameworks
 class DocumentTranslationRequest(BaseModel):
@@ -95,7 +95,7 @@ def run_document_translation_pipeline(job_id: str, file_path: str, input_languag
         translated_text = mt_result["translatedText"]
 
         jobs[job_id]["status"] = "completed"
-        jobs[job_id]["result"] = {f"extracted_{input_language}_text": extracted_text, f"translated_{output_language}_text": translated_text}
+        jobs[job_id]["result"] = translated_text
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
@@ -123,7 +123,7 @@ def run_speech_translation_pipeline(job_id: str, file_path: str, input_language:
         translated_text = mt_result["translatedText"]
 
         jobs[job_id]["status"] = "completed"
-        jobs[job_id]["result"] = {f"transcribed_{input_language}_text": transcribed_text, f"translated_{output_language}_text": translated_text}
+        jobs[job_id]["result"] = translated_text
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
@@ -151,7 +151,7 @@ def run_text_to_speech_pipeline(job_id: str, text: str, gender: str, input_langu
         audio_url = tts_result["audio_url"]
         
         jobs[job_id]["status"] = "completed"
-        jobs[job_id]["result"] = {f"source_{input_language}_text": text, f"translated_{output_language}_text": translated_text, f"{output_language}_audio_url": audio_url}
+        jobs[job_id]["result"] = audio_url
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
@@ -188,11 +188,7 @@ def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str, inpu
         audio_url = tts_result["audio_url"]
         
         jobs[job_id]["status"] = "completed"
-        jobs[job_id]["result"] = {
-            f"source_{input_language}_text": transcribed_text,
-            f"translated_{output_language}h_text": translated_text,
-            f"{output_language}_audio_url": audio_url
-        }
+        jobs[job_id]["result"] = audio_url
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
