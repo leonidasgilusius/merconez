@@ -62,7 +62,13 @@ def poll_for_result(service_name: str, job_id: str, url: str) -> dict:
         print(f"ORCHESTRATOR: Polling {service_name} job: {job_id}")
         response = requests.get(url)
         response.raise_for_status()
-        data = response.json()
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError as e:
+            # If the V1 service returns text that isn't JSON (e.g., an HTML error page),
+            # log it and treat it as a failure.
+            print(f"ORCHESTRATOR ERROR: V1 service returned non-JSON response for {service_name}. Content: {response.text}")
+            raise Exception(f"{service_name} returned invalid response format: {e}")
         
         if data["status"] == "completed":
             print(f"ORCHESTRATOR: {service_name} job {job_id} completed.")
@@ -135,7 +141,7 @@ def run_speech_translation_pipeline(job_id: str, file_path: str, input_language:
         jobs[job_id]["result"] = translated_text
     except Exception as e:
         jobs[job_id]["status"] = "failed"
-        jobs[job_id]["result"] = {"error": str(e)}
+        jobs[job_id]["result"] = json.dumps({"error": str(e)}) 
     finally: # <--- ADD THIS BLOCK
         try:
             if os.path.exists(file_path):
@@ -171,7 +177,7 @@ def run_text_to_speech_pipeline(job_id: str, text: str, gender: str, input_langu
         jobs[job_id]["result"] = audio_url
     except Exception as e:
         jobs[job_id]["status"] = "failed"
-        jobs[job_id]["result"] = {"error": str(e)}
+        jobs[job_id]["result"] = json.dumps({"error": str(e)}) 
 
 # --- NEW: Framework 4: Speech-to-Speech Translation Pipeline ---
 
@@ -208,7 +214,7 @@ def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str, inpu
         jobs[job_id]["result"] = audio_url
     except Exception as e:
         jobs[job_id]["status"] = "failed"
-        jobs[job_id]["result"] = {"error": str(e)}
+        jobs[job_id]["result"] = json.dumps({"error": str(e)})
     finally: # <--- ADD THIS BLOCK
         try:
             if os.path.exists(file_path):

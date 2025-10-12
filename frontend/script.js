@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- CONFIGURATION ---
+    // !!! CRITICAL: REPLACE THIS with your active ngrok public URL !!!
     const BASE_URL = 'https://tressie-phosphorescent-greyly.ngrok-free.dev'; 
 
     // --- STATE MANAGEMENT ---
@@ -11,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         processing: false,
     };
 
-    // --- DOM ELEMENT REFERENCES ---
+    // --- DOM ELEMENT REFERENCES (Assumed to exist in your HTML) ---
     const inputTypeSelector = document.getElementById('inputTypeSelector');
     const outputTypeSelector = document.getElementById('outputTypeSelector');
     const processBtn = document.getElementById('processBtn');
@@ -61,33 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- NEW HELPER FUNCTION FOR FILE UPLOAD ---
-
-const uploadFileAndGetPath = async (fileType, fileElement) => {
-    const file = fileElement.files[0];
-    const uploadEndpoint = fileType === 'Image' ? '/api/v2/file-upload/image' : '/api/v2/file-upload/audio';
-
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    // The comments regarding language passing can now be removed/simplified.
-
-    const response = await fetch(BASE_URL + uploadEndpoint, {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'ngrok-skip-browser-warning': 'true'
-        }
-    });
-
-    if (!response.ok) {
-        throw new Error(`File upload failed: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.file_path;
-};
-
     const updateOutputView = () => {
         textOutputContainer.classList.add('hidden');
         audioOutputContainer.classList.add('hidden');
@@ -96,7 +70,71 @@ const uploadFileAndGetPath = async (fileType, fileElement) => {
             case 'Audio': audioOutputContainer.classList.remove('hidden'); break;
         }
     };
-    
+
+    // --- FILE UPLOAD HELPER (STEP 1: Uploads file to server disk) ---
+    const uploadFileAndGetPath = async (fileType, fileElement) => {
+        const file = fileElement.files[0];
+        const uploadEndpoint = fileType === 'Image' ? '/api/v2/file-upload/image' : '/api/v2/file-upload/audio';
+
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch(BASE_URL + uploadEndpoint, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'ngrok-skip-browser-warning': 'true' 
+            }
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({}));
+            throw new Error(`File upload failed: ${response.statusText} - ${JSON.stringify(errorBody.detail || errorBody)}`);
+        }
+
+        const data = await response.json();
+        return data.file_path;
+    };
+
+    // --- POLLING LOGIC (For asynchronous jobs F1, F2, F3, F4) ---
+    const pollJobStatus = (jobUrl) => {
+        return new Promise((resolve, reject) => {
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch(jobUrl, {
+                        headers: {
+                            'ngrok-skip-browser-warning': 'true' 
+                        }
+                    });
+
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    
+                    // Safely read the response text first to handle empty/invalid JSON
+                    const text = await response.text();
+                    if (!text) {
+                        console.log('Polling received empty response, waiting...');
+                        return; 
+                    }
+                    
+                    const data = JSON.parse(text); // Use JSON.parse on the read text
+
+                    if (data.status === 'completed') {
+                        clearInterval(interval);
+                        resolve(data.result);
+                    } else if (data.status === 'failed') {
+                        clearInterval(interval);
+                        const errorDetails = typeof data.result === 'object' && data.result !== null ? JSON.stringify(data.result) : data.result;
+                        reject(`Job failed: ${errorDetails}`);
+                    }
+                } catch (error) {
+                    clearInterval(interval);
+                    reject(error);
+                }
+            }, 2000); 
+        });
+    };
+
+    // --- Boilerplate UI Functions (kept for context) ---
     const handleToggleButtonGroup = (selector, stateKey, callback) => {
         selector.addEventListener('click', (e) => {
             const button = e.target.closest('button');
@@ -111,7 +149,6 @@ const uploadFileAndGetPath = async (fileType, fileElement) => {
             if (callback) callback();
         });
     };
-
     const setupDropdown = (btn, menu, valueEl, chevron, stateKey) => {
         btn.addEventListener('click', () => {
             const isHidden = menu.classList.contains('hidden');
@@ -133,124 +170,34 @@ const uploadFileAndGetPath = async (fileType, fileElement) => {
             }
         });
     };
-    
-    // Close dropdowns when clicking outside
     document.addEventListener('click', (e) => {
         if (!inputLangBtn.contains(e.target) && !inputLangMenu.contains(e.target) && !inputLangMenu.classList.contains('hidden')) inputLangBtn.click();
         if (!outputLangBtn.contains(e.target) && !outputLangMenu.contains(e.target) && !outputLangMenu.classList.contains('hidden')) outputLangBtn.click();
     });
-
     // --- EVENT LISTENERS ---
-
     handleToggleButtonGroup(inputTypeSelector, 'inputType', updateInputView);
     handleToggleButtonGroup(outputTypeSelector, 'outputType', updateOutputView);
-    
     setupDropdown(inputLangBtn, inputLangMenu, inputLangValue, inputLangChevron, 'inputLang');
     setupDropdown(outputLangBtn, outputLangMenu, outputLangValue, outputLangChevron, 'outputLang');
-
     swapLangBtn.addEventListener('click', () => {
         [state.inputLang, state.outputLang] = [state.outputLang, state.inputLang];
         inputLangValue.textContent = state.inputLang;
         outputLangValue.textContent = state.outputLang;
     });
-
     imageUpload.addEventListener('change', (e) => { imageFileName.textContent = e.target.files.length > 0 ? e.target.files[0].name : 'JPG or PNG, max 5MB'; });
     audioUpload.addEventListener('change', (e) => { audioFileName.textContent = e.target.files.length > 0 ? e.target.files[0].name : 'WAV, max 5MB, ~20 seconds'; });
 
-    // --- API & PROCESSING LOGIC ---
 
-    const pollJobStatus = (jobUrl) => {
+    // --- MAIN PROCESSING LOGIC (STEP 2: Starts the pipeline) ---
+    processBtn.addEventListener('click', async () => {
+        if (state.processing) return;
+        
+        // 1. Validation (omitted for brevity, assume your robust validation code is here)
+        let validationError = '';
+        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+        const { inputType, outputType, inputLang, outputLang } = state;
 
-    return new Promise((resolve, reject) => {
-        const interval = setInterval(async () => {
-            try {
-                const response = await fetch(jobUrl, {
-                    // Always include the ngrok header in case the server needs it
-                    headers: { 'ngrok-skip-browser-warning': 'true' } 
-                });
-
-                if (!response.ok) {
-                    // Safely attempt to read any error detail
-                    const errorDetails = await response.text().catch(() => response.statusText);
-                    throw new Error(`HTTP error! Status: ${response.status}. Details: ${errorDetails}`);
-                }
-
-
-                // --- CRITICAL FIX START ---
-                // Safely read the response text first
-                const text = await response.text();
-                if (!text) {
-                    // The server returned 200 OK but an empty body. Wait and try again.
-                    console.log('Polling received empty response, waiting...');
-                    return; 
-                }
-
-
-                // Attempt to parse the valid JSON text
-                const data = JSON.parse(text);
-                // --- CRITICAL FIX END ---
-                
-                if (data.status === 'completed') {
-                    clearInterval(interval);
-                    resolve(data.result);
-                } else if (data.status === 'failed') {
-                    clearInterval(interval);
-                    const errorDetails = typeof data.result === 'object' && data.result !== null ? JSON.stringify(data.result) : data.result;
-                    reject(`Job failed: ${errorDetails}`);
-                }
-            } catch (error) {
-                clearInterval(interval);
-                reject(error);
-            }
-        }, 2000); // Poll every 2 seconds
-    });
-};
-    // --- API & PROCESSING LOGIC (MODIFIED) ---
-// ... (keep pollJobStatus function above this) ...
-
-processBtn.addEventListener('click', async () => {
-    if (state.processing) return;
-    
-    // 1. Validation (KEEP YOUR EXISTING VALIDATION LOGIC)
-    let validationError = '';
-    // ... (Your existing validation code for Text, Image, Audio) ...
-    
-    // Skip if validation fails
-    errorMessage.textContent = validationError;
-    if (validationError) return;
-
-    // 2. Set UI to processing state (KEEP EXISTING UI UPDATE)
-    state.processing = true;
-    processBtn.disabled = true;
-    processBtnText.textContent = 'Processing...';
-    loadingSpinner.classList.remove('hidden');
-    outputText.value = '';
-    audioDownloadLink.classList.add('hidden');
-    audioResultPlaceholder.classList.remove('hidden');
-
-    // 3. Determine API endpoint and prepare data
-    let endpoint = '';
-    let requestBody;
-    let jobUrlBase = '';
-    let isJsonRequest = false;
-    let filePath = null; // To hold the uploaded path
-    let isLiveTurn = false; // Flag for synchronous turn
-
-    const { inputType, outputType, inputLang, outputLang } = state;
-
-    try {
-        // --- STEP 3A: HANDLE FILE UPLOADS FIRST (if necessary) ---
-        if (inputType === 'Image') {
-            filePath = await uploadFileAndGetPath('Image', imageUpload); 
-        } else if (inputType === 'Audio') {
-            // Live Interpreter check: If Audio -> Audio (F4 S2S), we use the batch polling job
-            // For live-like turn, we'll assume a separate UI element/mode, but for now, we'll
-            // check for the S2S mode. If you intend a true live-turn, you'd add a separate button.
-            
-            // For batch/pipeline translation (F2 & F4), we upload the file first.
-            filePath = await uploadFileAndGetPath('Audio', audioUpload);
-=======
-        switch (state.inputType) {
+        switch (inputType) {
             case 'Text':
                 const wordCount = inputText.value.trim().split(/\s+/).filter(Boolean).length;
                 if (wordCount === 0) validationError = 'Please enter some text.';
@@ -269,196 +216,141 @@ processBtn.addEventListener('click', async () => {
                 } else if (audioFile.size > MAX_FILE_SIZE) {
                     validationError = 'Audio file size must be less than 5MB.';
                 } else {
-                    // === MODIFIED: More flexible WAV validation ===
                     const ALLOWED_AUDIO_TYPES = ['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/vnd.wave'];
                     const isAllowedMimeType = ALLOWED_AUDIO_TYPES.includes(audioFile.type);
                     const isWavExtension = audioFile.name.toLowerCase().endsWith('.wav');
-
                     if (!isAllowedMimeType && !isWavExtension) {
                          validationError = 'Only WAV audio files are allowed.';
                     }
                 }
                 break;
->>>>>>> 01b0e155184f5c15eb02458c029b4a0b3793ef0b
-        }
-        
-        // --- STEP 3B: DETERMINE FINAL API CALL ---
-        if (inputType === 'Image' && outputType === 'Text') {
-            // F1: Document Translation (Uses uploaded file path)
-            endpoint = '/api/v2/document-translation';
-            jobUrlBase = `${endpoint}/jobs/`;
-<<<<<<< HEAD
-            isJsonRequest = true;
-            requestBody = JSON.stringify({
-                image_file_path: filePath,
-                input_language: inputLang.toUpperCase(),
-                output_language: outputLang.toUpperCase()
-            });
-        } else if (inputType === 'Audio' && outputType === 'Text') {
-            // F2: Speech Translation (Uses uploaded file path)
-=======
-            requestBody = new FormData();
-            requestBody.append('image_file', imageUpload.files[0]);
-            requestBody.append('input_language', inputLang.toLowerCase());
-            requestBody.append('output_language', outputLang.toLowerCase());
-        } else if (inputType === 'Audio' && outputType === 'Text') { 
->>>>>>> 01b0e155184f5c15eb02458c029b4a0b3793ef0b
-            endpoint = '/api/v2/speech-translation';
-            jobUrlBase = `${endpoint}/jobs/`;
-            isJsonRequest = true;
-            requestBody = JSON.stringify({
-                audio_file_path: filePath,
-                input_language: inputLang.toUpperCase(),
-                output_language: outputLang.toUpperCase()
-            });
-        } else if (inputType === 'Text' && outputType === 'Audio') {
-            // F3: Text-to-Speech (Text-only, no upload needed)
-            endpoint = '/api/v2/text-to-speech';
-            jobUrlBase = `${endpoint}/jobs/`;
-            isJsonRequest = true;
-            requestBody = JSON.stringify({
-                text: inputText.value,
-                gender: "female",
-                input_language: inputLang.toUpperCase(),
-                output_language: outputLang.toUpperCase()
-            });
-        } else if (inputType === 'Audio' && outputType === 'Audio') {
-            // F4: Speech-to-Speech (Uses uploaded file path)
-            
-            // **PSEUDO-LIVE IMPLEMENTATION**
-            // For the pseudo-live feel, we will assume "Audio to Audio" is the *single-turn* live mode.
-            // This bypasses the long job polling.
-            
-            endpoint = '/api/v2/live-turn'; // <--- NEW SYNCHRONOUS ENDPOINT
-            isLiveTurn = true;
-            isJsonRequest = true;
-            requestBody = JSON.stringify({
-                speaker: "User A", // Assuming User A for simplicity in FE
-                audio_file_path: filePath,
-                gender: 'female',
-                input_language: inputLang.toUpperCase(),
-                output_language: outputLang.toUpperCase()
-            });
-            
-            // Note: If you wanted the *batch* S2S (F4), you'd use:
-            /*
-            // endpoint = '/api/v2/speech-to-speech';
-            // jobUrlBase = `${endpoint}/jobs/`;
-            // isJsonRequest = true;
-            // requestBody = JSON.stringify({ audio_file_path: filePath, ... })
-            */
-
-        } else {
-<<<<<<< HEAD
-            // ... (Error handling for unsupported types) ...
-            throw new Error(`Processing from ${inputType} to ${outputType} is not supported.`);
         }
 
-        // 4. Make API call
-        const postOptions = {
-            method: 'POST',
-            body: isJsonRequest ? requestBody : requestBody, // FormData is sent without Content-Type header
-            headers: {
-                'ngrok-skip-browser-warning': 'true',
-                ...(isJsonRequest && {'Content-Type': 'application/json'})
-=======
-            errorMessage.textContent = `Processing from ${inputType} to ${outputType} is not supported.`;
-            state.processing = false;
-            processBtn.disabled = false;
-            processBtnText.textContent = 'Process Content';
-            loadingSpinner.classList.add('hidden');
-            return;
-        }
+        errorMessage.textContent = validationError;
+        if (validationError) return;
 
-        // 4. Make API call
+        // 2. Set UI to processing state
+        state.processing = true;
+        processBtn.disabled = true;
+        processBtnText.textContent = 'Processing...';
+        loadingSpinner.classList.remove('hidden');
+        outputText.value = '';
+        audioDownloadLink.classList.add('hidden');
+        audioResultPlaceholder.classList.remove('hidden');
+
+        // 3. Determine API endpoint and prepare data
+        let endpoint = '';
+        let requestBody;
+        let jobUrlBase = '';
+        let filePath = null; 
+        let isLiveTurn = false; 
+
         try {
+            // --- STEP 3A: HANDLE FILE UPLOADS FIRST (if necessary) ---
+            if (inputType === 'Image') {
+                filePath = await uploadFileAndGetPath('Image', imageUpload);
+            } else if (inputType === 'Audio') {
+                filePath = await uploadFileAndGetPath('Audio', audioUpload);
+            }
+            
+            // --- STEP 3B: DETERMINE FINAL API CALL (JSON Body) ---
+            if (inputType === 'Image' && outputType === 'Text') {
+                // F1: Document Translation
+                endpoint = '/api/v2/document-translation';
+                jobUrlBase = `${endpoint}/jobs/`;
+                requestBody = JSON.stringify({
+                    image_file_path: filePath, // Sent as string via JSON
+                    input_language: inputLang.toUpperCase(),
+                    output_language: outputLang.toUpperCase()
+                });
+            } else if (inputType === 'Audio' && outputType === 'Text') {
+                // F2: Speech Translation
+                endpoint = '/api/v2/speech-translation';
+                jobUrlBase = `${endpoint}/jobs/`;
+                requestBody = JSON.stringify({
+                    audio_file_path: filePath, // Sent as string via JSON
+                    input_language: inputLang.toUpperCase(),
+                    output_language: outputLang.toUpperCase()
+                });
+            } else if (inputType === 'Text' && outputType === 'Audio') {
+                // F3: Text-to-Speech (Text-only)
+                endpoint = '/api/v2/text-to-speech';
+                jobUrlBase = `${endpoint}/jobs/`;
+                requestBody = JSON.stringify({
+                    text: inputText.value,
+                    gender: "female",
+                    input_language: inputLang.toUpperCase(),
+                    output_language: outputLang.toUpperCase()
+                });
+            } else if (inputType === 'Audio' && outputType === 'Audio') {
+                // F5: Pseudo-Live Translation (Synchronous)
+                endpoint = '/api/v2/live-turn'; 
+                isLiveTurn = true;
+                requestBody = JSON.stringify({
+                    speaker: "User A", 
+                    audio_file_path: filePath, // Sent as string via JSON
+                    gender: 'female',
+                    input_language: inputLang.toUpperCase(),
+                    output_language: outputLang.toUpperCase()
+                });
+            } else {
+                throw new Error(`Processing from ${inputType} to ${outputType} is not supported.`);
+            }
+
+            // 4. Execute API Call (Always JSON for Step 2)
             const postOptions = {
                 method: 'POST',
-                body: requestBody,
+                body: requestBody, // This MUST be the JSON string
                 headers: {
-                    'ngrok-skip-browser-warning': 'true'
+                    'ngrok-skip-browser-warning': 'true',
+                    'Content-Type': 'application/json' // CRITICAL: Ensures FastAPI reads JSON
                 }
             };
-            
-            if (isJsonRequest) {
-                postOptions.headers['Content-Type'] = 'application/json';
->>>>>>> 01b0e155184f5c15eb02458c029b4a0b3793ef0b
+
+            const initialResponse = await fetch(BASE_URL + endpoint, postOptions);
+            if (!initialResponse.ok) {
+                const errorBody = await initialResponse.json().catch(() => ({}));
+                throw new Error(`Initial request failed: ${initialResponse.statusText} - ${JSON.stringify(errorBody.detail || errorBody)}`);
             }
-        };
+            
+            let result;
 
-        const initialResponse = await fetch(BASE_URL + endpoint, postOptions);
-        if (!initialResponse.ok) {
-            const errorBody = await initialResponse.json().catch(() => ({}));
-            throw new Error(`Request failed: ${initialResponse.statusText} - ${JSON.stringify(errorBody)}`);
-        }
-        
-        let result;
+            if (isLiveTurn) {
+                // Direct synchronous response from /api/v2/live-turn
+                result = await initialResponse.json(); 
+            } else {
+                // Asynchronous Job Polling for F1, F2, F3
+                const jobData = await initialResponse.json();
+                const { jobId } = jobData;
+                processBtnText.textContent = 'Checking status...';
+                const jobUrl = BASE_URL + jobUrlBase + jobId;
+                result = await pollJobStatus(jobUrl);
+            }
 
-        if (isLiveTurn) {
-            // Direct synchronous response from /api/v2/live-turn
-            result = await initialResponse.json(); 
-        } else {
-            // Asynchronous Job Polling for F1, F2, F3
-            const jobData = await initialResponse.json();
-            const { jobId } = jobData;
-<<<<<<< HEAD
-            processBtnText.textContent = 'Checking status...';
-            const jobUrl = BASE_URL + jobUrlBase + jobId;
-            result = await pollJobStatus(jobUrl);
-=======
-
-            processBtnText.textContent = 'Checking status...';
-            const jobUrl = BASE_URL + jobUrlBase + jobId;
-            const result = await pollJobStatus(jobUrl);
-
+            // 5. Display Result
             if (outputType === 'Text') {
-                outputText.value = result;
+                const textResult = isLiveTurn ? result.translated_text : result; 
+                outputText.value = textResult; 
             } else if (outputType === 'Audio') {
-                audioDownloadLink.href = result;
+                const audioUrl = isLiveTurn ? result.output_audio_url : result;
+                
+                audioDownloadLink.href = audioUrl;
                 audioResultPlaceholder.classList.add('hidden');
                 audioDownloadLink.classList.remove('hidden');
             }
 
         } catch (error) {
             console.error('API Error:', error);
-            errorMessage.textContent = 'An error occurred during processing.';
+            errorMessage.textContent = `An error occurred during processing: ${error.message}`;
         } finally {
             state.processing = false;
             processBtn.disabled = false;
             processBtnText.textContent = 'Process Content';
             loadingSpinner.classList.add('hidden');
->>>>>>> 01b0e155184f5c15eb02458c029b4a0b3793ef0b
         }
-
-        // 5. Display Result
-        if (outputType === 'Text') {
-            outputText.value = isLiveTurn ? result.translated_text : result; // Live turn returns object, others return string
-        } else if (outputType === 'Audio') {
-            // Both live-turn and F3 (TTS) return a URL/object containing a URL
-            const audioUrl = isLiveTurn ? result.output_audio_url : result;
-            
-            audioDownloadLink.href = audioUrl;
-            audioResultPlaceholder.classList.add('hidden');
-            audioDownloadLink.classList.remove('hidden');
-            
-            // OPTIONAL: Auto-play the audio result
-            // const audio = new Audio(audioUrl);
-            // audio.play().catch(e => console.error("Auto-play failed:", e));
-        }
-
-    } catch (error) {
-        console.error('API Error:', error);
-        errorMessage.textContent = `An error occurred during processing: ${error.message}`;
-    } finally {
-        state.processing = false;
-        processBtn.disabled = false;
-        processBtnText.textContent = 'Process Content';
-        loadingSpinner.classList.add('hidden');
-    }
-});
+    });
 
     // --- INITIALIZATION ---
     updateInputView();
     updateOutputView();
 });
-

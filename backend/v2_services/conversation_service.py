@@ -103,7 +103,7 @@ def run_conversation_pipeline(job_id: str, turns: list[ConversationTurn]):
 
     except Exception as e:
         jobs[job_id]["status"] = "failed"
-        jobs[job_id]["result"] = {"error": str(e)}
+        jobs[job_id]["result"] = json.dumps({"error": str(e)})
 
 
 # ---------------------
