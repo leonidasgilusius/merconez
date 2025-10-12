@@ -1,7 +1,3 @@
-to test, change port in vite.config.js and observe polling when running npm run dev
-
----
-
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
