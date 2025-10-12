@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inputType: 'Text',
         outputType: 'Text',
         inputLang: 'English',
-        outputLang: 'Spanish',
+        outputLang: 'Malayalam',
         processing: false,
     };
 
