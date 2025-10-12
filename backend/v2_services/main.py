@@ -29,18 +29,27 @@ class Job(BaseModel):
 # Models for the request bodies of our frameworks
 class DocumentTranslationRequest(BaseModel):
     image_file_path: str
+    input_language: str
+    output_language: str
+
 
 class SpeechTranslationRequest(BaseModel):
     audio_file_path: str
+    input_language: str
+    output_language: str    
 
 class TextToSpeechRequest(BaseModel):
     text: str
     gender: str = "female"
+    input_language: str
+    output_language: str
 
 # NEW: Request model for the Speech-to-Speech pipeline
 class SpeechToSpeechRequest(BaseModel):
     audio_file_path: str
     gender: str = "female"
+    input_language: str
+    output_language: str
 
 
 # --- Reusable Helper Function for Polling ---
@@ -65,11 +74,11 @@ def poll_for_result(service_name: str, job_id: str, url: str) -> dict:
 
 # --- Framework 1: Document (Image) Translation Pipeline (No changes) ---
 
-def run_document_translation_pipeline(job_id: str, file_path: str):
+def run_document_translation_pipeline(job_id: str, file_path: str, input_language: str, output_language: str):
     try:
         # Step 1: Call OCR to get Malayalam text from an image
         print("ORCHESTRATOR (DOC-PIPE): Calling v1 OCR service.")
-        ocr_payload = {"image_file_path": file_path, "language": "MALAYALAM"}
+        ocr_payload = {"image_file_path": file_path, "language": input_language}
         ocr_response = requests.post("http://127.0.0.1:5003/api/v1/ocr/jobs", json=ocr_payload)
         ocr_response.raise_for_status()
         ocr_job_id = ocr_response.json()["jobId"]
@@ -78,7 +87,7 @@ def run_document_translation_pipeline(job_id: str, file_path: str):
 
         # Step 2: Call MT to translate the extracted Malayalam text to English
         print("ORCHESTRATOR (DOC-PIPE): Calling v1 MT service.")
-        mt_payload = {"text": extracted_text, "language1": "MALAYALAM", "language2": "ENGLISH"}
+        mt_payload = {"text": extracted_text, "language1": input_language, "language2": output_language}
         mt_response = requests.post("http://127.0.0.1:5004/api/v1/translate/jobs", json=mt_payload)
         mt_response.raise_for_status()
         mt_job_id = mt_response.json()["jobId"]
@@ -86,18 +95,18 @@ def run_document_translation_pipeline(job_id: str, file_path: str):
         translated_text = mt_result["translatedText"]
 
         jobs[job_id]["status"] = "completed"
-        jobs[job_id]["result"] = {"extracted_malayalam_text": extracted_text, "translated_english_text": translated_text}
+        jobs[job_id]["result"] = {f"extracted_{input_language}_text": extracted_text, f"translated_{output_language}_text": translated_text}
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
 
 # --- Framework 2: Speech Translation Pipeline (No changes) ---
 
-def run_speech_translation_pipeline(job_id: str, file_path: str):
+def run_speech_translation_pipeline(job_id: str, file_path: str, input_language: str, output_language: str):
     try:
         # Step 1: Call ASR to get Malayalam text from audio
         print("ORCHESTRATOR (SPEECH-PIPE): Calling v1 ASR service.")
-        asr_payload = {"audio_file_path": file_path, "language": "MALAYALAM"}
+        asr_payload = {"audio_file_path": file_path, "language": input_language}
         asr_response = requests.post("http://127.0.0.1:5001/api/v1/asr/jobs", json=asr_payload)
         asr_response.raise_for_status()
         asr_job_id = asr_response.json()["jobId"]
@@ -106,7 +115,7 @@ def run_speech_translation_pipeline(job_id: str, file_path: str):
 
         # Step 2: Call MT to translate the transcribed Malayalam text to English
         print("ORCHESTRATOR (SPEECH-PIPE): Calling v1 MT service.")
-        mt_payload = {"text": transcribed_text, "language1": "MALAYALAM", "language2": "ENGLISH"}
+        mt_payload = {"text": transcribed_text, "language1": input_language, "language2": output_language}
         mt_response = requests.post("http://127.0.0.1:5004/api/v1/translate/jobs", json=mt_payload)
         mt_response.raise_for_status()
         mt_job_id = mt_response.json()["jobId"]
@@ -114,18 +123,18 @@ def run_speech_translation_pipeline(job_id: str, file_path: str):
         translated_text = mt_result["translatedText"]
 
         jobs[job_id]["status"] = "completed"
-        jobs[job_id]["result"] = {"transcribed_malayalam_text": transcribed_text, "translated_english_text": translated_text}
+        jobs[job_id]["result"] = {f"transcribed_{input_language}_text": transcribed_text, f"translated_{output_language}_text": translated_text}
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
 
 # --- Framework 3: Text-to-Speech Synthesis Pipeline (No changes) ---
 
-def run_text_to_speech_pipeline(job_id: str, text: str, gender: str):
+def run_text_to_speech_pipeline(job_id: str, text: str, gender: str, input_language: str, output_language: str):
     try:
         # Step 1: Call MT to translate English text to Malayalam
         print("ORCHESTRATOR (TTS-PIPE): Calling v1 MT service.")
-        mt_payload = {"text": text, "language1": "ENGLISH", "language2": "MALAYALAM"}
+        mt_payload = {"text": text, "language1": input_language, "language2": output_language}
         mt_response = requests.post("http://127.0.0.1:5004/api/v1/translate/jobs", json=mt_payload)
         mt_response.raise_for_status()
         mt_job_id = mt_response.json()["jobId"]
@@ -134,7 +143,7 @@ def run_text_to_speech_pipeline(job_id: str, text: str, gender: str):
 
         # Step 2: Call TTS to get Malayalam speech from the translated text
         print("ORCHESTRATOR (TTS-PIPE): Calling v1 TTS service.")
-        tts_payload = {"text_to_speak": translated_text, "gender": gender, "language": "MALAYALAM"}
+        tts_payload = {"text_to_speak": translated_text, "gender": gender, "language": output_language}
         tts_response = requests.post("http://127.0.0.1:5002/api/v1/tts/jobs", json=tts_payload)
         tts_response.raise_for_status()
         tts_job_id = tts_response.json()["jobId"]
@@ -142,18 +151,18 @@ def run_text_to_speech_pipeline(job_id: str, text: str, gender: str):
         audio_url = tts_result["audio_url"]
         
         jobs[job_id]["status"] = "completed"
-        jobs[job_id]["result"] = {"source_english_text": text, "translated_malayalam_text": translated_text, "malayalam_audio_url": audio_url}
+        jobs[job_id]["result"] = {f"source_{input_language}_text": text, f"translated_{output_language}_text": translated_text, f"{output_language}_audio_url": audio_url}
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
 
 # --- NEW: Framework 4: Speech-to-Speech Translation Pipeline ---
 
-def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str):
+def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str, input_language: str, output_language: str):
     try:
         # Step 1: Call ASR to get Malayalam text from audio
         print("ORCHESTRATOR (S2S-PIPE): Calling v1 ASR service.")
-        asr_payload = {"audio_file_path": file_path, "language": "MALAYALAM"}
+        asr_payload = {"audio_file_path": file_path, "language": input_language}
         asr_response = requests.post("http://127.0.0.1:5001/api/v1/asr/jobs", json=asr_payload)
         asr_response.raise_for_status()
         asr_job_id = asr_response.json()["jobId"]
@@ -162,27 +171,27 @@ def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str):
 
         # Step 2: Call MT to translate the transcribed Malayalam text to English
         print("ORCHESTRATOR (S2S-PIPE): Calling v1 MT service.")
-        mt_payload = {"text": transcribed_text, "language1": "MALAYALAM", "language2": "ENGLISH"}
+        mt_payload = {"text": transcribed_text, "language1": input_language, "language2": output_language}
         mt_response = requests.post("http://127.0.0.1:5004/api/v1/translate/jobs", json=mt_payload)
         mt_response.raise_for_status()
         mt_job_id = mt_response.json()["jobId"]
         mt_result = poll_for_result("MT", mt_job_id, f"http://127.0.0.1:5004/api/v1/translate/jobs/{mt_job_id}")
-        translated_english_text = mt_result["translatedText"]
+        translated_text = mt_result["translatedText"]
 
         # Step 3: Call TTS to get English speech from the translated English text
-        print("ORCHESTRATOR (S2S-PIPE): Calling v1 TTS service for English.")
-        tts_payload = {"text_to_speak": translated_english_text, "gender": gender, "language": "ENGLISH"}
+        print(f"ORCHESTRATOR (S2S-PIPE): Calling v1 TTS service for {output_language}.")
+        tts_payload = {"text_to_speak": translated_text, "gender": gender, "language": output_language}
         tts_response = requests.post("http://127.0.0.1:5002/api/v1/tts/jobs", json=tts_payload)
         tts_response.raise_for_status()
         tts_job_id = tts_response.json()["jobId"]
         tts_result = poll_for_result("TTS", tts_job_id, f"http://127.0.0.1:5002/api/v1/tts/jobs/{tts_job_id}")
-        english_audio_url = tts_result["audio_url"]
+        audio_url = tts_result["audio_url"]
         
         jobs[job_id]["status"] = "completed"
         jobs[job_id]["result"] = {
-            "source_malayalam_text": transcribed_text,
-            "translated_english_text": translated_english_text,
-            "english_audio_url": english_audio_url
+            f"source_{input_language}_text": transcribed_text,
+            f"translated_{output_language}h_text": translated_text,
+            f"{output_language}_audio_url": audio_url
         }
     except Exception as e:
         jobs[job_id]["status"] = "failed"
@@ -195,7 +204,7 @@ def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str):
 async def start_doc_trans_job(request: DocumentTranslationRequest, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "processing", "result": None}
-    background_tasks.add_task(run_document_translation_pipeline, job_id, request.image_file_path)
+    background_tasks.add_task(run_document_translation_pipeline, job_id, request.image_file_path, request.input_language.upper(), request.output_language.upper())
     return {"jobId": job_id, "status": "processing"}
 
 @app.get("/api/v2/document-translation/jobs/{job_id}", response_model=Job, tags=["Framework 1: Document Translation"])
@@ -208,7 +217,7 @@ async def get_doc_trans_status(job_id: str):
 async def start_speech_trans_job(request: SpeechTranslationRequest, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "processing", "result": None}
-    background_tasks.add_task(run_speech_translation_pipeline, job_id, request.audio_file_path)
+    background_tasks.add_task(run_speech_translation_pipeline, job_id, request.audio_file_path, request.input_language.upper(), request.output_language.upper())
     return {"jobId": job_id, "status": "processing"}
 
 @app.get("/api/v2/speech-translation/jobs/{job_id}", response_model=Job, tags=["Framework 2: Speech Translation"])
@@ -221,7 +230,7 @@ async def get_speech_trans_status(job_id: str):
 async def start_tts_synth_job(request: TextToSpeechRequest, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "processing", "result": None}
-    background_tasks.add_task(run_text_to_speech_pipeline, job_id, request.text, request.gender)
+    background_tasks.add_task(run_text_to_speech_pipeline, job_id, request.text, request.gender, request.input_language.upper(), request.output_language.upper())
     return {"jobId": job_id, "status": "processing"}
 
 @app.get("/api/v2/text-to-speech/jobs/{job_id}", response_model=Job, tags=["Framework 3: Text to Speech"])
@@ -234,7 +243,7 @@ async def get_tts_synth_status(job_id: str):
 async def start_s2s_trans_job(request: SpeechToSpeechRequest, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "processing", "result": None}
-    background_tasks.add_task(run_speech_to_speech_pipeline, job_id, request.audio_file_path, request.gender)
+    background_tasks.add_task(run_speech_to_speech_pipeline, job_id, request.audio_file_path, request.gender, request.input_language.upper(), request.output_language.upper())
     return {"jobId": job_id, "status": "processing"}
 
 @app.get("/api/v2/speech-to-speech/jobs/{job_id}", response_model=Job, tags=["Framework 4: Speech-to-Speech Translation"])
