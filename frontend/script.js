@@ -160,6 +160,7 @@ const uploadFileAndGetPath = async (fileType, fileElement) => {
     // --- API & PROCESSING LOGIC ---
 
     const pollJobStatus = (jobUrl) => {
+
     return new Promise((resolve, reject) => {
         const interval = setInterval(async () => {
             try {
@@ -174,6 +175,7 @@ const uploadFileAndGetPath = async (fileType, fileElement) => {
                     throw new Error(`HTTP error! Status: ${response.status}. Details: ${errorDetails}`);
                 }
 
+
                 // --- CRITICAL FIX START ---
                 // Safely read the response text first
                 const text = await response.text();
@@ -182,6 +184,7 @@ const uploadFileAndGetPath = async (fileType, fileElement) => {
                     console.log('Polling received empty response, waiting...');
                     return; 
                 }
+
 
                 // Attempt to parse the valid JSON text
                 const data = JSON.parse(text);
@@ -246,6 +249,37 @@ processBtn.addEventListener('click', async () => {
             
             // For batch/pipeline translation (F2 & F4), we upload the file first.
             filePath = await uploadFileAndGetPath('Audio', audioUpload);
+=======
+        switch (state.inputType) {
+            case 'Text':
+                const wordCount = inputText.value.trim().split(/\s+/).filter(Boolean).length;
+                if (wordCount === 0) validationError = 'Please enter some text.';
+                else if (wordCount > 50) validationError = 'Text must not exceed 50 words.';
+                break;
+            case 'Image':
+                const imageFile = imageUpload.files[0];
+                if (!imageFile) validationError = 'Please select an image file.';
+                else if (imageFile.size > MAX_FILE_SIZE) validationError = 'Image file size must be less than 5MB.';
+                else if (!['image/jpeg', 'image/png'].includes(imageFile.type)) validationError = 'Only JPG or PNG images are allowed.';
+                break;
+            case 'Audio':
+                const audioFile = audioUpload.files[0];
+                if (!audioFile) {
+                    validationError = 'Please select an audio file.';
+                } else if (audioFile.size > MAX_FILE_SIZE) {
+                    validationError = 'Audio file size must be less than 5MB.';
+                } else {
+                    // === MODIFIED: More flexible WAV validation ===
+                    const ALLOWED_AUDIO_TYPES = ['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/vnd.wave'];
+                    const isAllowedMimeType = ALLOWED_AUDIO_TYPES.includes(audioFile.type);
+                    const isWavExtension = audioFile.name.toLowerCase().endsWith('.wav');
+
+                    if (!isAllowedMimeType && !isWavExtension) {
+                         validationError = 'Only WAV audio files are allowed.';
+                    }
+                }
+                break;
+>>>>>>> 01b0e155184f5c15eb02458c029b4a0b3793ef0b
         }
         
         // --- STEP 3B: DETERMINE FINAL API CALL ---
@@ -253,6 +287,7 @@ processBtn.addEventListener('click', async () => {
             // F1: Document Translation (Uses uploaded file path)
             endpoint = '/api/v2/document-translation';
             jobUrlBase = `${endpoint}/jobs/`;
+<<<<<<< HEAD
             isJsonRequest = true;
             requestBody = JSON.stringify({
                 image_file_path: filePath,
@@ -261,6 +296,13 @@ processBtn.addEventListener('click', async () => {
             });
         } else if (inputType === 'Audio' && outputType === 'Text') {
             // F2: Speech Translation (Uses uploaded file path)
+=======
+            requestBody = new FormData();
+            requestBody.append('image_file', imageUpload.files[0]);
+            requestBody.append('input_language', inputLang.toLowerCase());
+            requestBody.append('output_language', outputLang.toLowerCase());
+        } else if (inputType === 'Audio' && outputType === 'Text') { 
+>>>>>>> 01b0e155184f5c15eb02458c029b4a0b3793ef0b
             endpoint = '/api/v2/speech-translation';
             jobUrlBase = `${endpoint}/jobs/`;
             isJsonRequest = true;
@@ -307,6 +349,7 @@ processBtn.addEventListener('click', async () => {
             */
 
         } else {
+<<<<<<< HEAD
             // ... (Error handling for unsupported types) ...
             throw new Error(`Processing from ${inputType} to ${outputType} is not supported.`);
         }
@@ -318,6 +361,28 @@ processBtn.addEventListener('click', async () => {
             headers: {
                 'ngrok-skip-browser-warning': 'true',
                 ...(isJsonRequest && {'Content-Type': 'application/json'})
+=======
+            errorMessage.textContent = `Processing from ${inputType} to ${outputType} is not supported.`;
+            state.processing = false;
+            processBtn.disabled = false;
+            processBtnText.textContent = 'Process Content';
+            loadingSpinner.classList.add('hidden');
+            return;
+        }
+
+        // 4. Make API call
+        try {
+            const postOptions = {
+                method: 'POST',
+                body: requestBody,
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            };
+            
+            if (isJsonRequest) {
+                postOptions.headers['Content-Type'] = 'application/json';
+>>>>>>> 01b0e155184f5c15eb02458c029b4a0b3793ef0b
             }
         };
 
@@ -336,9 +401,33 @@ processBtn.addEventListener('click', async () => {
             // Asynchronous Job Polling for F1, F2, F3
             const jobData = await initialResponse.json();
             const { jobId } = jobData;
+<<<<<<< HEAD
             processBtnText.textContent = 'Checking status...';
             const jobUrl = BASE_URL + jobUrlBase + jobId;
             result = await pollJobStatus(jobUrl);
+=======
+
+            processBtnText.textContent = 'Checking status...';
+            const jobUrl = BASE_URL + jobUrlBase + jobId;
+            const result = await pollJobStatus(jobUrl);
+
+            if (outputType === 'Text') {
+                outputText.value = result;
+            } else if (outputType === 'Audio') {
+                audioDownloadLink.href = result;
+                audioResultPlaceholder.classList.add('hidden');
+                audioDownloadLink.classList.remove('hidden');
+            }
+
+        } catch (error) {
+            console.error('API Error:', error);
+            errorMessage.textContent = 'An error occurred during processing.';
+        } finally {
+            state.processing = false;
+            processBtn.disabled = false;
+            processBtnText.textContent = 'Process Content';
+            loadingSpinner.classList.add('hidden');
+>>>>>>> 01b0e155184f5c15eb02458c029b4a0b3793ef0b
         }
 
         // 5. Display Result
