@@ -54,6 +54,11 @@ class SpeechToSpeechRequest(BaseModel):
     output_language: str
 
 
+class TextToTextRequest(BaseModel):
+    text: str
+    input_language: str
+    output_language: str
+
 # --- Reusable Helper Function for Polling ---
 
 def poll_for_result(service_name: str, job_id: str, url: str) -> dict:
@@ -224,6 +229,75 @@ def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str, inpu
             print(f"ORCHESTRATOR (DOC-PIPE): Warning: Failed to delete {file_path}: {cleanup_err}")
 
 
+
+# frame 5 text to text
+def run_text_to_text_pipeline(job_id: str, text: str, input_language: str, output_language: str):
+    try:
+        # Step 1: Call MT to translate (This is the entire pipeline)
+        print("ORCHESTRATOR (T2T-PIPE): Calling v1 MT service.")
+        mt_payload = {"text": text, "language1": input_language, "language2": output_language}
+        mt_response = requests.post("http://127.0.0.1:5004/api/v1/translate/jobs", json=mt_payload)
+        mt_response.raise_for_status()
+        mt_job_id = mt_response.json()["jobId"]
+        mt_result = poll_for_result("MT", mt_job_id, f"http://127.0.0.1:5004/api/v1/translate/jobs/{mt_job_id}")
+        translated_text = mt_result["translatedText"]
+        
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["result"] = translated_text
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["result"] = json.dumps({"error": str(e)}) # <-- FIX: JSON DUMP APPLIED
+
+
+# In backend/v2_services/main.py
+
+# --- NEW: Framework 6: Image-to-Audio Pipeline (OCR -> MT -> TTS) ---
+
+def run_image_to_audio_pipeline(job_id: str, file_path: str, input_language: str, output_language: str):
+    try:
+        # Step 1: Call OCR to get text from the image
+        print("ORCHESTRATOR (I2A-PIPE): Calling v1 OCR service.")
+        ocr_payload = {"image_file_path": file_path, "language": input_language}
+        ocr_response = requests.post("http://127.0.0.1:5003/api/v1/ocr/jobs", json=ocr_payload)
+        ocr_response.raise_for_status()
+        ocr_job_id = ocr_response.json()["jobId"]
+        ocr_result = poll_for_result("OCR", ocr_job_id, f"http://127.0.0.1:5003/api/v1/ocr/jobs/{ocr_job_id}")
+        extracted_text = ocr_result["text"]
+
+        # Step 2: Call MT to translate the extracted text
+        print("ORCHESTRATOR (I2A-PIPE): Calling v1 MT service.")
+        mt_payload = {"text": extracted_text, "language1": input_language, "language2": output_language}
+        mt_response = requests.post("http://127.0.0.1:5004/api/v1/translate/jobs", json=mt_payload)
+        mt_response.raise_for_status()
+        mt_job_id = mt_response.json()["jobId"]
+        mt_result = poll_for_result("MT", mt_job_id, f"http://127.0.0.1:5004/api/v1/translate/jobs/{mt_job_id}")
+        translated_text = mt_result["translatedText"]
+        
+        # Step 3: Call TTS to get audio output
+        print(f"ORCHESTRATOR (I2A-PIPE): Calling v1 TTS service for {output_language}.")
+        # NOTE: We assume 'female' gender, as it's the only gender parameter available globally.
+        tts_payload = {"text_to_speak": translated_text, "gender": 'female', "language": output_language}
+        tts_response = requests.post("http://127.0.0.1:5002/api/v1/tts/jobs", json=tts_payload)
+        tts_response.raise_for_status()
+        tts_job_id = tts_response.json()["jobId"]
+        tts_result = poll_for_result("TTS", tts_job_id, f"http://127.0.0.1:5002/api/v1/tts/jobs/{tts_job_id}")
+        audio_url = tts_result["audio_url"]
+        
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["result"] = audio_url
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["result"] = json.dumps({"error": str(e)}) 
+    finally:
+        # CRITICAL: File cleanup
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"ORCHESTRATOR (I2A-PIPE): Cleaned up file: {file_path}")
+        except Exception as cleanup_err:
+            print(f"ORCHESTRATOR (I2A-PIPE): Warning: Failed to delete {file_path}: {cleanup_err}")
+
+
 # --- API Endpoints ---
 
 # Endpoints for Framework 1 (No changes)
@@ -279,6 +353,37 @@ async def get_s2s_trans_status(job_id: str):
     return {"jobId": job_id, **job}
 
 
+#frame 5
+# Endpoints for Framework 3 (No changes)
+@app.post("/api/v2/text-to-text", response_model=Job, status_code=202, tags=["Framework 5: Text to Text"])
+async def start_t2t_job(request: TextToTextRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "processing", "result": None}
+    
+    # Calls the new, simpler T2T pipeline
+    background_tasks.add_task(run_text_to_text_pipeline, job_id, request.text, request.input_language.upper(), request.output_language.upper())
+    return {"jobId": job_id, "status": "processing"}
+
+@app.get("/api/v2/text-to-text/jobs/{job_id}", response_model=Job, tags=["Framework 5: Text to Text"])
+async def get_t2t_status(job_id: str):
+    if not (job := jobs.get(job_id)): raise HTTPException(status_code=404, detail="Job not found")
+    return {"jobId": job_id, **job}
+
+
+# In backend/v2_services/main.py
+
+# --- NEW: Endpoints for Framework 6 (Image-to-Audio) ---
+@app.post("/api/v2/image-to-audio", response_model=Job, status_code=202, tags=["Framework 6: Image to Audio"])
+async def start_i2a_job(request: DocumentTranslationRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "processing", "result": None}
+    background_tasks.add_task(run_image_to_audio_pipeline, job_id, request.image_file_path, request.input_language.upper(), request.output_language.upper())
+    return {"jobId": job_id, "status": "processing"}
+
+@app.get("/api/v2/image-to-audio/jobs/{job_id}", response_model=Job, tags=["Framework 6: Image to Audio"])
+async def get_i2a_status(job_id: str):
+    if not (job := jobs.get(job_id)): raise HTTPException(status_code=404, detail="Job not found")
+    return {"jobId": job_id, **job}
 # from fastapi import FastAPI, UploadFile, File, Form
 # import shutil
 # import os

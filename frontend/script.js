@@ -263,7 +263,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     input_language: inputLang.toUpperCase(),
                     output_language: outputLang.toUpperCase()
                 });
-            } else if (inputType === 'Audio' && outputType === 'Text') {
+            } 
+            else if (inputType === 'Image' && outputType === 'Audio') {
+                // F6: Image to Audio (New Pipeline)
+                endpoint = '/api/v2/image-to-audio';
+                jobUrlBase = `${endpoint}/jobs/`;
+                requestBody = JSON.stringify({
+                    image_file_path: filePath, 
+                    input_language: inputLang.toUpperCase(),
+                    output_language: outputLang.toUpperCase()
+                });
+            } 
+            else if (inputType === 'Audio' && outputType === 'Text') {
                 // F2: Speech Translation
                 endpoint = '/api/v2/speech-translation';
                 jobUrlBase = `${endpoint}/jobs/`;
@@ -293,7 +304,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     input_language: inputLang.toUpperCase(),
                     output_language: outputLang.toUpperCase()
                 });
-            } else {
+             } 
+            else if (inputType === 'Text' && outputType === 'Text') {
+                // F5: Text-to-Text
+                endpoint = '/api/v2/text-to-text'; // <-- Correct endpoint
+                jobUrlBase = `${endpoint}/jobs/`;
+                requestBody = JSON.stringify({
+                    text: inputText.value,
+                    input_language: inputLang.toUpperCase(),
+                    output_language: outputLang.toUpperCase()
+                });
+            } else if (inputType === 'Text' && outputType === 'Audio') {
+                // F3: Text-to-Speech
+                endpoint = '/api/v2/text-to-speech'; // <-- Correct endpoint
+                // ... (rest of T2S logic) ...
+            }
+                else {
                 throw new Error(`Processing from ${inputType} to ${outputType} is not supported.`);
             }
 
