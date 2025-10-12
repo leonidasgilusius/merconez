@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- CONFIGURATION ---
-    const BASE_URL = 'https://tressie-phosphorescent-greyly.ngrok-free.dev';
+    const BASE_URL = 'http://0.0.0.0:5006';
 
     // --- STATE MANAGEMENT ---
     let state = {
