@@ -4,6 +4,8 @@ from pydantic import BaseModel
 import uuid
 import time
 import requests
+import os 
+import json
 
 app = FastAPI(title="Bhashini V2 Orchestration Service")
 
@@ -98,7 +100,14 @@ def run_document_translation_pipeline(job_id: str, file_path: str, input_languag
         jobs[job_id]["result"] = translated_text
     except Exception as e:
         jobs[job_id]["status"] = "failed"
-        jobs[job_id]["result"] = {"error": str(e)}
+        jobs[job_id]["result"] = json.dumps({"error": str(e)})
+    finally: # <--- ADD THIS BLOCK
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"ORCHESTRATOR (DOC-PIPE): Cleaned up file: {file_path}")
+        except Exception as cleanup_err:
+            print(f"ORCHESTRATOR (DOC-PIPE): Warning: Failed to delete {file_path}: {cleanup_err}")
 
 # --- Framework 2: Speech Translation Pipeline (No changes) ---
 
@@ -127,6 +136,14 @@ def run_speech_translation_pipeline(job_id: str, file_path: str, input_language:
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
+    finally: # <--- ADD THIS BLOCK
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"ORCHESTRATOR (DOC-PIPE): Cleaned up file: {file_path}")
+        except Exception as cleanup_err:
+            print(f"ORCHESTRATOR (DOC-PIPE): Warning: Failed to delete {file_path}: {cleanup_err}")
+
 
 # --- Framework 3: Text-to-Speech Synthesis Pipeline (No changes) ---
 
@@ -192,6 +209,14 @@ def run_speech_to_speech_pipeline(job_id: str, file_path: str, gender: str, inpu
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["result"] = {"error": str(e)}
+    finally: # <--- ADD THIS BLOCK
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"ORCHESTRATOR (DOC-PIPE): Cleaned up file: {file_path}")
+        except Exception as cleanup_err:
+            print(f"ORCHESTRATOR (DOC-PIPE): Warning: Failed to delete {file_path}: {cleanup_err}")
+
 
 # --- API Endpoints ---
 
@@ -246,4 +271,92 @@ async def start_s2s_trans_job(request: SpeechToSpeechRequest, background_tasks: 
 async def get_s2s_trans_status(job_id: str):
     if not (job := jobs.get(job_id)): raise HTTPException(status_code=404, detail="Job not found")
     return {"jobId": job_id, **job}
+
+
+# from fastapi import FastAPI, UploadFile, File, Form
+# import shutil
+# import os
+# import uuid
+
+# UPLOAD_DIR = "uploaded_files"
+# os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# @app.post("/api/v2/upload-image")
+# async def upload_image(
+#     file: UploadFile = File(...),
+#     input_language: str = Form(...),
+#     output_language: str = Form(...)
+# ):
+#     """
+#     Uploads an image, saves it temporarily, and returns a jobId.
+#     """
+#     try:
+#         # Generate unique filename
+#         job_id = str(uuid.uuid4())
+#         file_path = os.path.join(UPLOAD_DIR, f"{job_id}_{file.filename}")
+
+#         # Save the uploaded file
+#         with open(file_path, "wb") as buffer:
+#             shutil.copyfileobj(file.file, buffer)
+
+#         # Return a jobId and saved path
+#         return {
+#             "jobId": job_id,
+#             "file_path": file_path,
+#             "status": "uploaded",
+#             "input_language": input_language,
+#             "output_language": output_language
+#         }
+
+#     except Exception as e:
+#         return {"error": str(e)}
+
+
+# ---------------------
+# FILE UPLOAD ENDPOINTS (REPLACES OLD /api/v2/upload-image)
+# ---------------------
+from fastapi import UploadFile, File, Form, BackgroundTasks
+import shutil
+import os
+import uuid
+
+# Use a specific UPLOAD_DIR definition to ensure files are located correctly
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploaded_files")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+@app.post("/api/v2/file-upload/audio", tags=["Utility"])
+async def upload_audio_file(file: UploadFile = File(...)):
+    job_id = str(uuid.uuid4())
+    file_path = os.path.join(UPLOAD_DIR, f"{job_id}_{file.filename}")
+
+    try:
+        with open(file_path, "wb") as buffer:
+            # IMPORTANT: Use file.read() for async FastAPI context
+            file_content = await file.read()
+            buffer.write(file_content)
+
+        return {"file_path": file_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audio upload failed: {e}")
+
+
+@app.post("/api/v2/file-upload/image", tags=["Utility"])
+async def upload_image_file(file: UploadFile = File(...)):
+    job_id = str(uuid.uuid4())
+    file_path = os.path.join(UPLOAD_DIR, f"{job_id}_{file.filename}")
+
+    try:
+        with open(file_path, "wb") as buffer:
+            # IMPORTANT: Use file.read() for async FastAPI context
+            file_content = await file.read()
+            buffer.write(file_content)
+
+        return {"file_path": file_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image upload failed: {e}")
+
+
+from . import conversation_service
+app.include_router(conversation_service.router)
 

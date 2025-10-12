@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- CONFIGURATION ---
-    const BASE_URL = 'http://0.0.0.0:5006';
+    const BASE_URL = 'https://tressie-phosphorescent-greyly.ngrok-free.dev'; 
 
     // --- STATE MANAGEMENT ---
     let state = {
@@ -60,6 +60,33 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'Audio': audioInputContainer.classList.remove('hidden'); break;
         }
     };
+
+    // --- NEW HELPER FUNCTION FOR FILE UPLOAD ---
+
+const uploadFileAndGetPath = async (fileType, fileElement) => {
+    const file = fileElement.files[0];
+    const uploadEndpoint = fileType === 'Image' ? '/api/v2/file-upload/image' : '/api/v2/file-upload/audio';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // The comments regarding language passing can now be removed/simplified.
+
+    const response = await fetch(BASE_URL + uploadEndpoint, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'ngrok-skip-browser-warning': 'true'
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`File upload failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.file_path;
+};
 
     const updateOutputView = () => {
         textOutputContainer.classList.add('hidden');
@@ -133,160 +160,213 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- API & PROCESSING LOGIC ---
 
     const pollJobStatus = (jobUrl) => {
-        return new Promise((resolve, reject) => {
-            const interval = setInterval(async () => {
-                try {
-                    const response = await fetch(jobUrl);
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    const data = await response.json();
+    return new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+            try {
+                const response = await fetch(jobUrl, {
+                    // Always include the ngrok header in case the server needs it
+                    headers: { 'ngrok-skip-browser-warning': 'true' } 
+                });
 
-                    if (data.status === 'completed') {
-                        clearInterval(interval);
-                        resolve(data.result);
-                    } else if (data.status === 'failed') {
-                        clearInterval(interval);
-                        reject('Job processing failed.');
-                    }
-                    // If still processing, the interval will just continue.
-                } catch (error) {
-                    clearInterval(interval);
-                    reject(error);
+                if (!response.ok) {
+                    // Safely attempt to read any error detail
+                    const errorDetails = await response.text().catch(() => response.statusText);
+                    throw new Error(`HTTP error! Status: ${response.status}. Details: ${errorDetails}`);
                 }
-            }, 2000); // Poll every 2 seconds
-        });
-    };
 
-    processBtn.addEventListener('click', async () => {
-        if (state.processing) return;
-        
-        // 1. Validation
-        let validationError = '';
-        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                // --- CRITICAL FIX START ---
+                // Safely read the response text first
+                const text = await response.text();
+                if (!text) {
+                    // The server returned 200 OK but an empty body. Wait and try again.
+                    console.log('Polling received empty response, waiting...');
+                    return; 
+                }
 
-        switch (state.inputType) {
-            case 'Text':
-                const wordCount = inputText.value.trim().split(/\s+/).filter(Boolean).length;
-                if (wordCount === 0) validationError = 'Please enter some text.';
-                else if (wordCount > 50) validationError = 'Text must not exceed 50 words.';
-                break;
-            case 'Image':
-                const imageFile = imageUpload.files[0];
-                if (!imageFile) validationError = 'Please select an image file.';
-                else if (imageFile.size > MAX_FILE_SIZE) validationError = 'Image file size must be less than 5MB.';
-                else if (!['image/jpeg', 'image/png'].includes(imageFile.type)) validationError = 'Only JPG or PNG images are allowed.';
-                break;
-            case 'Audio':
-                const audioFile = audioUpload.files[0];
-                if (!audioFile) validationError = 'Please select an audio file.';
-                else if (audioFile.size > MAX_FILE_SIZE) validationError = 'Audio file size must be less than 5MB.';
-                else if (audioFile.type !== 'audio/wav') validationError = 'Only WAV audio files are allowed.';
-                break;
+                // Attempt to parse the valid JSON text
+                const data = JSON.parse(text);
+                // --- CRITICAL FIX END ---
+                
+                if (data.status === 'completed') {
+                    clearInterval(interval);
+                    resolve(data.result);
+                } else if (data.status === 'failed') {
+                    clearInterval(interval);
+                    const errorDetails = typeof data.result === 'object' && data.result !== null ? JSON.stringify(data.result) : data.result;
+                    reject(`Job failed: ${errorDetails}`);
+                }
+            } catch (error) {
+                clearInterval(interval);
+                reject(error);
+            }
+        }, 2000); // Poll every 2 seconds
+    });
+};
+    // --- API & PROCESSING LOGIC (MODIFIED) ---
+// ... (keep pollJobStatus function above this) ...
+
+processBtn.addEventListener('click', async () => {
+    if (state.processing) return;
+    
+    // 1. Validation (KEEP YOUR EXISTING VALIDATION LOGIC)
+    let validationError = '';
+    // ... (Your existing validation code for Text, Image, Audio) ...
+    
+    // Skip if validation fails
+    errorMessage.textContent = validationError;
+    if (validationError) return;
+
+    // 2. Set UI to processing state (KEEP EXISTING UI UPDATE)
+    state.processing = true;
+    processBtn.disabled = true;
+    processBtnText.textContent = 'Processing...';
+    loadingSpinner.classList.remove('hidden');
+    outputText.value = '';
+    audioDownloadLink.classList.add('hidden');
+    audioResultPlaceholder.classList.remove('hidden');
+
+    // 3. Determine API endpoint and prepare data
+    let endpoint = '';
+    let requestBody;
+    let jobUrlBase = '';
+    let isJsonRequest = false;
+    let filePath = null; // To hold the uploaded path
+    let isLiveTurn = false; // Flag for synchronous turn
+
+    const { inputType, outputType, inputLang, outputLang } = state;
+
+    try {
+        // --- STEP 3A: HANDLE FILE UPLOADS FIRST (if necessary) ---
+        if (inputType === 'Image') {
+            filePath = await uploadFileAndGetPath('Image', imageUpload); 
+        } else if (inputType === 'Audio') {
+            // Live Interpreter check: If Audio -> Audio (F4 S2S), we use the batch polling job
+            // For live-like turn, we'll assume a separate UI element/mode, but for now, we'll
+            // check for the S2S mode. If you intend a true live-turn, you'd add a separate button.
+            
+            // For batch/pipeline translation (F2 & F4), we upload the file first.
+            filePath = await uploadFileAndGetPath('Audio', audioUpload);
         }
-
-        errorMessage.textContent = validationError;
-        if (validationError) return;
-
-        // 2. Set UI to processing state
-        state.processing = true;
-        processBtn.disabled = true;
-        processBtnText.textContent = 'Processing...';
-        loadingSpinner.classList.remove('hidden');
-        outputText.value = '';
-        audioDownloadLink.classList.add('hidden');
-        audioResultPlaceholder.classList.remove('hidden');
-
-        // 3. Determine API endpoint and prepare data
-        let endpoint = '';
-        let requestBody;
-        let jobUrlBase = '';
-        let isJsonRequest = false;
-
-        const { inputType, outputType, inputLang, outputLang } = state;
-
+        
+        // --- STEP 3B: DETERMINE FINAL API CALL ---
         if (inputType === 'Image' && outputType === 'Text') {
+            // F1: Document Translation (Uses uploaded file path)
             endpoint = '/api/v2/document-translation';
             jobUrlBase = `${endpoint}/jobs/`;
-            requestBody = new FormData();
-            requestBody.append('image_file', imageUpload.files[0]);
-            requestBody.append('input_language', inputLang.toLowerCase());
-            requestBody.append('output_language', outputLang.toLowerCase());
-        } else if (inputType === 'Audio' && outputType === 'Text') { // NOTE: Interpreted from user spec
+            isJsonRequest = true;
+            requestBody = JSON.stringify({
+                image_file_path: filePath,
+                input_language: inputLang.toUpperCase(),
+                output_language: outputLang.toUpperCase()
+            });
+        } else if (inputType === 'Audio' && outputType === 'Text') {
+            // F2: Speech Translation (Uses uploaded file path)
             endpoint = '/api/v2/speech-translation';
             jobUrlBase = `${endpoint}/jobs/`;
-            requestBody = new FormData();
-            requestBody.append('audio_file', audioUpload.files[0]);
-            requestBody.append('input_language', inputLang.toLowerCase());
-            requestBody.append('output_language', outputLang.toLowerCase());
+            isJsonRequest = true;
+            requestBody = JSON.stringify({
+                audio_file_path: filePath,
+                input_language: inputLang.toUpperCase(),
+                output_language: outputLang.toUpperCase()
+            });
         } else if (inputType === 'Text' && outputType === 'Audio') {
+            // F3: Text-to-Speech (Text-only, no upload needed)
             endpoint = '/api/v2/text-to-speech';
             jobUrlBase = `${endpoint}/jobs/`;
             isJsonRequest = true;
             requestBody = JSON.stringify({
                 text: inputText.value,
                 gender: "female",
-                input_language: inputLang.toLowerCase(),
-                output_language: outputLang.toLowerCase()
+                input_language: inputLang.toUpperCase(),
+                output_language: outputLang.toUpperCase()
             });
         } else if (inputType === 'Audio' && outputType === 'Audio') {
-            endpoint = '/api/v2/speech-to-speech';
-            jobUrlBase = `${endpoint}/jobs/`;
-            requestBody = new FormData();
-            requestBody.append('audio_file', audioUpload.files[0]);
-            requestBody.append('gender', 'female');
-            requestBody.append('input_language', inputLang.toLowerCase());
-            requestBody.append('output_language', outputLang.toLowerCase());
+            // F4: Speech-to-Speech (Uses uploaded file path)
+            
+            // **PSEUDO-LIVE IMPLEMENTATION**
+            // For the pseudo-live feel, we will assume "Audio to Audio" is the *single-turn* live mode.
+            // This bypasses the long job polling.
+            
+            endpoint = '/api/v2/live-turn'; // <--- NEW SYNCHRONOUS ENDPOINT
+            isLiveTurn = true;
+            isJsonRequest = true;
+            requestBody = JSON.stringify({
+                speaker: "User A", // Assuming User A for simplicity in FE
+                audio_file_path: filePath,
+                gender: 'female',
+                input_language: inputLang.toUpperCase(),
+                output_language: outputLang.toUpperCase()
+            });
+            
+            // Note: If you wanted the *batch* S2S (F4), you'd use:
+            /*
+            // endpoint = '/api/v2/speech-to-speech';
+            // jobUrlBase = `${endpoint}/jobs/`;
+            // isJsonRequest = true;
+            // requestBody = JSON.stringify({ audio_file_path: filePath, ... })
+            */
+
         } else {
-            errorMessage.textContent = `Processing from ${inputType} to ${outputType} is not supported.`;
-            // Reset UI
-            state.processing = false;
-            processBtn.disabled = false;
-            processBtnText.textContent = 'Process Content';
-            loadingSpinner.classList.add('hidden');
-            return;
+            // ... (Error handling for unsupported types) ...
+            throw new Error(`Processing from ${inputType} to ${outputType} is not supported.`);
         }
 
         // 4. Make API call
-        try {
-            // Initial POST request to start the job
-            const postOptions = {
-                method: 'POST',
-                body: requestBody,
-            };
-            if (isJsonRequest) {
-                postOptions.headers = { 'Content-Type': 'application/json' };
+        const postOptions = {
+            method: 'POST',
+            body: isJsonRequest ? requestBody : requestBody, // FormData is sent without Content-Type header
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+                ...(isJsonRequest && {'Content-Type': 'application/json'})
             }
+        };
 
-            const initialResponse = await fetch(BASE_URL + endpoint, postOptions);
-            if (!initialResponse.ok) throw new Error(`Initial request failed: ${initialResponse.statusText}`);
-            
+        const initialResponse = await fetch(BASE_URL + endpoint, postOptions);
+        if (!initialResponse.ok) {
+            const errorBody = await initialResponse.json().catch(() => ({}));
+            throw new Error(`Request failed: ${initialResponse.statusText} - ${JSON.stringify(errorBody)}`);
+        }
+        
+        let result;
+
+        if (isLiveTurn) {
+            // Direct synchronous response from /api/v2/live-turn
+            result = await initialResponse.json(); 
+        } else {
+            // Asynchronous Job Polling for F1, F2, F3
             const jobData = await initialResponse.json();
             const { jobId } = jobData;
-
-            // Start polling for the result
             processBtnText.textContent = 'Checking status...';
             const jobUrl = BASE_URL + jobUrlBase + jobId;
-            const result = await pollJobStatus(jobUrl);
-
-            // 5. Handle result
-            if (outputType === 'Text') {
-                outputText.value = result;
-            } else if (outputType === 'Audio') {
-                audioDownloadLink.href = result;
-                audioResultPlaceholder.classList.add('hidden');
-                audioDownloadLink.classList.remove('hidden');
-            }
-
-        } catch (error) {
-            console.error('API Error:', error);
-            errorMessage.textContent = 'An error occurred during processing.';
-        } finally {
-            // 6. Reset UI
-            state.processing = false;
-            processBtn.disabled = false;
-            processBtnText.textContent = 'Process Content';
-            loadingSpinner.classList.add('hidden');
+            result = await pollJobStatus(jobUrl);
         }
-    });
+
+        // 5. Display Result
+        if (outputType === 'Text') {
+            outputText.value = isLiveTurn ? result.translated_text : result; // Live turn returns object, others return string
+        } else if (outputType === 'Audio') {
+            // Both live-turn and F3 (TTS) return a URL/object containing a URL
+            const audioUrl = isLiveTurn ? result.output_audio_url : result;
+            
+            audioDownloadLink.href = audioUrl;
+            audioResultPlaceholder.classList.add('hidden');
+            audioDownloadLink.classList.remove('hidden');
+            
+            // OPTIONAL: Auto-play the audio result
+            // const audio = new Audio(audioUrl);
+            // audio.play().catch(e => console.error("Auto-play failed:", e));
+        }
+
+    } catch (error) {
+        console.error('API Error:', error);
+        errorMessage.textContent = `An error occurred during processing: ${error.message}`;
+    } finally {
+        state.processing = false;
+        processBtn.disabled = false;
+        processBtnText.textContent = 'Process Content';
+        loadingSpinner.classList.add('hidden');
+    }
+});
 
     // --- INITIALIZATION ---
     updateInputView();
