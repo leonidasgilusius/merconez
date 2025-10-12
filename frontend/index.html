@@ -1,13 +1,159 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>my-translator-app</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Translator</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1e293b">
+    <meta name="description" content="A universal translator PWA built with HTML, CSS, and JavaScript.">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/1e293b/ffffff?text=UT">
+
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Link to the external CSS file -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-900 text-slate-300 grid-background">
+
+    <!-- Main Application Container -->
+    <main class="min-h-screen w-full flex items-center justify-center p-4">
+        
+        <div class="w-full max-w-2xl bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl shadow-black/20 p-6 sm:p-8 space-y-6">
+            
+            <div class="text-center">
+                <h1 class="text-2xl sm:text-3xl font-bold text-white">Universal Translator</h1>
+                <p class="text-slate-400 mt-1">Select your input, languages, and desired output.</p>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium text-slate-400">Input Type</label>
+                <div id="inputTypeSelector" class="grid grid-cols-3 gap-2 mt-2">
+                    <button data-value="Text" class="input-type-btn active bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200">Text</button>
+                    <button data-value="Image" class="input-type-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold py-2 px-4 rounded-lg transition-all duration-200">Image</button>
+                    <button data-value="Audio" class="input-type-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold py-2 px-4 rounded-lg transition-all duration-200">Audio</button>
+                </div>
+            </div>
+
+            <!-- Language Selection -->
+            <div class="flex items-center space-x-2">
+                <!-- Input Language Dropdown -->
+                <div class="relative w-full">
+                    <button id="inputLangBtn" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-between transition-colors">
+                        <span id="inputLangValue">English</span>
+                        <svg id="inputLangChevron" class="w-5 h-5 transition-transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    <div id="inputLangMenu" class="dropdown-menu absolute z-10 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg hidden opacity-0 transform scale-95">
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="English">English</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="Malayalam">Malayalam</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="French">French</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="German">German</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="Japanese">Japanese</a>
+                    </div>
+                </div>
+                
+                <button id="swapLangBtn" class="flex-shrink-0 p-2 bg-slate-700 hover:bg-slate-600 rounded-full transition-all duration-200 hover:rotate-180">
+                    <svg class="w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+                </button>
+
+                <!-- Output Language Dropdown -->
+                <div class="relative w-full">
+                    <button id="outputLangBtn" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-between transition-colors">
+                        <span id="outputLangValue">Malayalam</span>
+                        <svg id="outputLangChevron" class="w-5 h-5 transition-transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                     <div id="outputLangMenu" class="dropdown-menu absolute z-10 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg hidden opacity-0 transform scale-95">
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="English">English</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="Spanish">Spanish</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="French">French</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="German">German</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white" data-value="Japanese">Japanese</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DYNAMIC INPUT AREA -->
+            <div id="dynamicInputArea">
+                <!-- Text Input -->
+                <div id="textInputContainer">
+                    <textarea id="inputText" class="w-full h-28 p-3 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Enter text here (max 50 words)..."></textarea>
+                </div>
+
+                <!-- Image Input -->
+                <div id="imageInputContainer" class="hidden">
+                     <label for="imageUpload" class="flex flex-col items-center justify-center w-full h-28 border-2 border-slate-600 border-dashed rounded-lg cursor-pointer bg-slate-900/50 hover:bg-slate-700/50">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                             <svg class="w-8 h-8 mb-4 text-slate-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/></svg>
+                            <p class="mb-2 text-sm text-slate-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                            <p id="imageFileName" class="text-xs text-slate-500">JPG or PNG, max 5MB</p>
+                        </div>
+                        <input id="imageUpload" type="file" class="hidden" accept=".jpg, .jpeg, .png" />
+                    </label>
+                </div>
+
+                <!-- Audio Input -->
+                <div id="audioInputContainer" class="hidden">
+                    <label for="audioUpload" class="flex flex-col items-center justify-center w-full h-28 border-2 border-slate-600 border-dashed rounded-lg cursor-pointer bg-slate-900/50 hover:bg-slate-700/50">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg class="w-8 h-8 mb-4 text-slate-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/></svg>
+                            <p class="mb-2 text-sm text-slate-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                            <p id="audioFileName" class="text-xs text-slate-500">WAV, max 5MB, ~20 seconds</p>
+                        </div>
+                        <input id="audioUpload" type="file" class="hidden" accept=".wav" />
+                    </label>
+                </div>
+            </div>
+
+            <!-- DYNAMIC OUTPUT AREA -->
+            <div id="dynamicOutputArea">
+                <!-- Text Output -->
+                <div id="textOutputContainer">
+                    <textarea id="outputText" readonly class="w-full h-28 p-3 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Result will appear here..."></textarea>
+                </div>
+                <!-- Audio Output -->
+                <div id="audioOutputContainer" class="hidden">
+                    <div class="flex items-center justify-center w-full h-28 border-2 border-slate-600 border-dashed rounded-lg bg-slate-900/50">
+                        <div id="audioResultPlaceholder" class="text-center text-slate-400">
+                            <p>Audio output will be available here.</p>
+                        </div>
+                        <a href="#" id="audioDownloadLink" download class="hidden items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-all">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Download Audio
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output Type Selector -->
+             <div>
+                <label class="text-sm font-medium text-slate-400">Output Type</label>
+                <div id="outputTypeSelector" class="grid grid-cols-2 gap-2 mt-2">
+                    <button data-value="Text" class="output-type-btn active bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200">Text</button>
+                    <button data-value="Audio" class="output-type-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold py-2 px-4 rounded-lg transition-all duration-200">Audio</button>
+                </div>
+            </div>
+
+            <!-- Validation Error Message Area -->
+            <div id="errorMessage" class="text-red-400 text-sm text-center h-4"></div>
+
+            <!-- Process Button -->
+            <button id="processBtn" class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-indigo-500/50 transition-all duration-300 transform hover:scale-105">
+                <span id="processBtnText">Process Content</span>
+                <svg id="loadingSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+        </div>
+    </main>
+    <script src="script.js" defer></script>
+</body>
 </html>
+
