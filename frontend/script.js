@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inputType: 'Text',
         outputType: 'Text',
         inputLang: 'English',
-        outputLang: 'Malayalam',
+        outputLang: 'Spanish',
         processing: false,
     };
 
@@ -136,7 +136,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
                 try {
-                    const response = await fetch(jobUrl);
+                    const response = await fetch(jobUrl, {
+                        headers: {
+                            'ngrok-skip-browser-warning': 'true'
+                        }
+                    });
+
                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                     const data = await response.json();
 
@@ -147,12 +152,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         clearInterval(interval);
                         reject('Job processing failed.');
                     }
-                    // If still processing, the interval will just continue.
                 } catch (error) {
                     clearInterval(interval);
                     reject(error);
                 }
-            }, 2000); // Poll every 2 seconds
+            }, 2000);
         });
     };
 
@@ -177,9 +181,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'Audio':
                 const audioFile = audioUpload.files[0];
-                if (!audioFile) validationError = 'Please select an audio file.';
-                else if (audioFile.size > MAX_FILE_SIZE) validationError = 'Audio file size must be less than 5MB.';
-                else if (audioFile.type !== 'audio/wav') validationError = 'Only WAV audio files are allowed.';
+                if (!audioFile) {
+                    validationError = 'Please select an audio file.';
+                } else if (audioFile.size > MAX_FILE_SIZE) {
+                    validationError = 'Audio file size must be less than 5MB.';
+                } else {
+                    // === MODIFIED: More flexible WAV validation ===
+                    const ALLOWED_AUDIO_TYPES = ['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/vnd.wave'];
+                    const isAllowedMimeType = ALLOWED_AUDIO_TYPES.includes(audioFile.type);
+                    const isWavExtension = audioFile.name.toLowerCase().endsWith('.wav');
+
+                    if (!isAllowedMimeType && !isWavExtension) {
+                         validationError = 'Only WAV audio files are allowed.';
+                    }
+                }
                 break;
         }
 
@@ -210,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
             requestBody.append('image_file', imageUpload.files[0]);
             requestBody.append('input_language', inputLang.toLowerCase());
             requestBody.append('output_language', outputLang.toLowerCase());
-        } else if (inputType === 'Audio' && outputType === 'Text') { // NOTE: Interpreted from user spec
+        } else if (inputType === 'Audio' && outputType === 'Text') { 
             endpoint = '/api/v2/speech-translation';
             jobUrlBase = `${endpoint}/jobs/`;
             requestBody = new FormData();
@@ -237,7 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
             requestBody.append('output_language', outputLang.toLowerCase());
         } else {
             errorMessage.textContent = `Processing from ${inputType} to ${outputType} is not supported.`;
-            // Reset UI
             state.processing = false;
             processBtn.disabled = false;
             processBtnText.textContent = 'Process Content';
@@ -247,13 +261,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 4. Make API call
         try {
-            // Initial POST request to start the job
             const postOptions = {
                 method: 'POST',
                 body: requestBody,
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
             };
+            
             if (isJsonRequest) {
-                postOptions.headers = { 'Content-Type': 'application/json' };
+                postOptions.headers['Content-Type'] = 'application/json';
             }
 
             const initialResponse = await fetch(BASE_URL + endpoint, postOptions);
@@ -262,12 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const jobData = await initialResponse.json();
             const { jobId } = jobData;
 
-            // Start polling for the result
             processBtnText.textContent = 'Checking status...';
             const jobUrl = BASE_URL + jobUrlBase + jobId;
             const result = await pollJobStatus(jobUrl);
 
-            // 5. Handle result
             if (outputType === 'Text') {
                 outputText.value = result;
             } else if (outputType === 'Audio') {
@@ -280,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('API Error:', error);
             errorMessage.textContent = 'An error occurred during processing.';
         } finally {
-            // 6. Reset UI
             state.processing = false;
             processBtn.disabled = false;
             processBtnText.textContent = 'Process Content';
