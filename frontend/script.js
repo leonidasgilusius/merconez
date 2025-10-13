@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- CONFIGURATION ---
-    // !!! CRITICAL: REPLACE THIS with your active ngrok public URL !!!
-    const BASE_URL = 'https://tressie-phosphorescent-greyly.ngrok-free.dev'; 
+    const BASE_URL = 'https://tressie-phosphorescent-greyly.ngrok-free.dev';
 
     // --- STATE MANAGEMENT ---
     let state = {
