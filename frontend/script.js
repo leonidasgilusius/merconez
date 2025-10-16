@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- CONFIGURATION ---
-    const BASE_URL = 'https://tressie-phosphorescent-greyly.ngrok-free.dev';
+    const BASE_URL = 'https://inocencia-unepistolary-subperiosteally.ngrok-free.dev';
 
     // --- STATE MANAGEMENT ---
     let state = {
