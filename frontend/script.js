@@ -294,10 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             } else if (inputType === 'Audio' && outputType === 'Audio') {
                 // F5: Pseudo-Live Translation (Synchronous)
-                endpoint = '/api/v2/live-turn'; 
-                isLiveTurn = true;
+                endpoint = '/api/v2/speech-to-speech'; 
+                jobUrlBase = `${endpoint}/jobs/`;
                 requestBody = JSON.stringify({
-                    speaker: "User A", 
                     audio_file_path: filePath, // Sent as string via JSON
                     gender: 'female',
                     input_language: inputLang.toUpperCase(),
