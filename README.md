@@ -46,6 +46,7 @@ You can access the live application at:
 - **Process Manager:** Honcho  
 - **Tunneling:** Ngrok  
 - Each core service (ASR, MT, OCR, TTS) runs as a **microservice** on separate ports.
+- To run the backend, cd to backend/ and run `honcho start` on your terminal.
 
 ### Frontend
 - **Framework:** Vanilla JavaScript (no libraries, no React)

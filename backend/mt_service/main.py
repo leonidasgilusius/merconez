@@ -3,10 +3,6 @@ from pydantic import BaseModel
 import uuid
 import os
 import requests
-from dotenv import load_dotenv
-
-# Load environment variables from a .env file
-load_dotenv()
 
 app = FastAPI()
 

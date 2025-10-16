@@ -1,9 +1,15 @@
-# Secrets
+__pycache__
+__pycache__/
+
 /backend/.env
 /.env
 # Python virtual environment
 /backend/venv/
 
-# Python cache
-/backend/__pycache__/
+# Python cach
 /backend/*.pyc
+
+notes.txt
+images.png
+mala.wav
+test_audio.wav

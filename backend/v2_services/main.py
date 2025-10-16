@@ -6,6 +6,9 @@ import time
 import requests
 import os 
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Bhashini V2 Orchestration Service")
 
